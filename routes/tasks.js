@@ -1,76 +1,107 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
 const Task = require('../models/Task');
+const auth = require('../middleware/auth'); // ✅ import your existing middleware
 
-// Create
-router.post('/', auth, async (req, res) => {
+// 🔒 Apply auth middleware to all task routes
+router.use(auth);
+
+// ✅ GET /api/tasks — Get all tasks for the logged-in user (with filters)
+router.get('/', async (req, res) => {
   try {
-    const { title, description, status, dueDate, priority } = req.body;
-    const task = new Task({
-      user: req.user._id,
+    const userId = req.user._id; // ✅ user from JWT
+    const { status, priority, dueBefore, query } = req.query;
+
+    const filter = { owner: userId }; // ✅ user-specific filter
+
+    if (status && status.trim() !== '') filter.status = status;
+    if (priority && priority.trim() !== '') filter.priority = priority;
+    if (dueBefore && dueBefore.trim() !== '') {
+      filter.dueDate = { $lte: new Date(dueBefore) };
+    }
+    if (query && query.trim() !== '') {
+      filter.title = { $regex: query, $options: 'i' }; // case-insensitive search
+    }
+
+    const tasks = await Task.find(filter).lean();
+    return res.json({ tasks });
+  } catch (err) {
+    console.error('GET /api/tasks error:', err);
+    return res.status(500).json({ message: 'Internal Server Error', error: err.message });
+  }
+});
+
+// ✅ GET /api/tasks/:id — Get a single task (user-specific)
+router.get('/:id', async (req, res) => {
+  try {
+    const task = await Task.findOne({ _id: req.params.id, owner: req.user._id }).lean();
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+    return res.json({ task });
+  } catch (err) {
+    console.error(`GET /api/tasks/${req.params.id} error:`, err);
+    return res.status(500).json({ message: 'Internal Server Error', error: err.message });
+  }
+});
+
+// ✅ POST /api/tasks — Create a new task
+router.post('/', async (req, res) => {
+  try {
+    const { title, description, completed, dueDate, priority, status } = req.body;
+    const userId = req.user._id;
+
+    if (!title) return res.status(400).json({ message: 'Title is required' });
+
+    const task = await Task.create({
       title,
-      description,
-      status,
-      dueDate,
-      priority
+      description: description || '',
+      completed: completed ?? false,
+      owner: userId, // ✅ assign task to logged-in user
+      dueDate: dueDate ? new Date(dueDate) : null,
+      priority: priority || 'Medium',
+      status: status || 'Pending',
     });
-    await task.save();
-    res.json(task);
-  } catch(err){ console.error(err); res.status(500).json({ message: 'Server error' });}
+
+    return res.status(201).json({ task });
+  } catch (err) {
+    console.error('POST /api/tasks error:', err);
+    return res.status(500).json({ message: 'Internal Server Error', error: err.message });
+  }
 });
 
-// Read: list (with optional filters)
-router.get('/', auth, async (req, res) => {
+// ✅ PUT /api/tasks/:id — Update a task (only if owned by user)
+router.put('/:id', async (req, res) => {
   try {
-    const { status, priority, dueBefore, dueAfter, search } = req.query;
-    const query = { user: req.user._id };
-    if(status) query.status = status;
-    if(priority) query.priority = priority;
-    if(dueBefore) query.dueDate = { ...(query.dueDate||{}), $lte: new Date(dueBefore) };
-    if(dueAfter) query.dueDate = { ...(query.dueDate||{}), $gte: new Date(dueAfter) };
-    if(search) query.$or = [
-      { title: new RegExp(search, 'i') },
-      { description: new RegExp(search, 'i') }
-    ];
-    const tasks = await Task.find(query).sort({ dueDate: 1, createdAt: -1 });
-    res.json(tasks);
-  } catch(err){ console.error(err); res.status(500).json({ message: 'Server error' });}
+    const userId = req.user._id;
+    const updates = req.body;
+
+    const task = await Task.findOneAndUpdate(
+      { _id: req.params.id, owner: userId },
+      updates,
+      { new: true }
+    ).lean();
+
+    if (!task) return res.status(404).json({ message: 'Task not found or not authorized' });
+
+    return res.json({ task });
+  } catch (err) {
+    console.error(`PUT /api/tasks/${req.params.id} error:`, err);
+    return res.status(500).json({ message: 'Internal Server Error', error: err.message });
+  }
 });
 
-// Read single
-router.get('/:id', auth, async (req, res) => {
+// ✅ DELETE /api/tasks/:id — Delete a task (only if owned by user)
+router.delete('/:id', async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
-    if(!task || task.user.toString() !== req.user._id.toString()) return res.status(404).json({ message: 'Not found' });
-    res.json(task);
-  } catch(err){ console.error(err); res.status(500).json({ message: 'Server error' });}
-});
+    const userId = req.user._id;
+    const task = await Task.findOneAndDelete({ _id: req.params.id, owner: userId }).lean();
 
-// Update
-router.put('/:id', auth, async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.id);
-    if(!task || task.user.toString() !== req.user._id.toString()) return res.status(404).json({ message: 'Not found' });
-    const { title, description, status, dueDate, priority } = req.body;
-    if(title !== undefined) task.title = title;
-    if(description !== undefined) task.description = description;
-    if(status !== undefined) task.status = status;
-    if(dueDate !== undefined) task.dueDate = dueDate;
-    if(priority !== undefined) task.priority = priority;
-    await task.save();
-    res.json(task);
-  } catch(err){ console.error(err); res.status(500).json({ message: 'Server error' });}
-});
+    if (!task) return res.status(404).json({ message: 'Task not found or not authorized' });
 
-// Delete
-router.delete('/:id', auth, async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.id);
-    if(!task || task.user.toString() !== req.user._id.toString()) return res.status(404).json({ message: 'Not found' });
-    await task.remove();
-    res.json({ message: 'Deleted' });
-  } catch(err){ console.error(err); res.status(500).json({ message: 'Server error' });}
+    return res.json({ message: 'Deleted successfully', task });
+  } catch (err) {
+    console.error(`DELETE /api/tasks/${req.params.id} error:`, err);
+    return res.status(500).json({ message: 'Internal Server Error', error: err.message });
+  }
 });
 
 module.exports = router;
