@@ -6,7 +6,6 @@ const TaskSchema = new mongoose.Schema({
   completed: { type: Boolean, default: false },
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
-  // ✅ Add these new fields:
   status: {
     type: String,
     enum: ['Pending', 'In Progress', 'Completed'],

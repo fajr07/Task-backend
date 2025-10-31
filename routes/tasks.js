@@ -1,18 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const Task = require('../models/Task');
-const auth = require('../middleware/auth'); // ✅ import your existing middleware
+const auth = require('../middleware/auth'); 
 
-// 🔒 Apply auth middleware to all task routes
+
 router.use(auth);
 
-// ✅ GET /api/tasks — Get all tasks for the logged-in user (with filters)
+
 router.get('/', async (req, res) => {
   try {
-    const userId = req.user._id; // ✅ user from JWT
+    const userId = req.user._id; 
     const { status, priority, dueBefore, query } = req.query;
 
-    const filter = { owner: userId }; // ✅ user-specific filter
+    const filter = { owner: userId }; 
 
     if (status && status.trim() !== '') filter.status = status;
     if (priority && priority.trim() !== '') filter.priority = priority;
@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
       filter.dueDate = { $lte: new Date(dueBefore) };
     }
     if (query && query.trim() !== '') {
-      filter.title = { $regex: query, $options: 'i' }; // case-insensitive search
+      filter.title = { $regex: query, $options: 'i' }; 
     }
 
     const tasks = await Task.find(filter).lean();
@@ -31,7 +31,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ✅ GET /api/tasks/:id — Get a single task (user-specific)
 router.get('/:id', async (req, res) => {
   try {
     const task = await Task.findOne({ _id: req.params.id, owner: req.user._id }).lean();
@@ -43,7 +42,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ✅ POST /api/tasks — Create a new task
 router.post('/', async (req, res) => {
   try {
     const { title, description, completed, dueDate, priority, status } = req.body;
@@ -55,7 +53,7 @@ router.post('/', async (req, res) => {
       title,
       description: description || '',
       completed: completed ?? false,
-      owner: userId, // ✅ assign task to logged-in user
+      owner: userId, 
       dueDate: dueDate ? new Date(dueDate) : null,
       priority: priority || 'Medium',
       status: status || 'Pending',
@@ -68,7 +66,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ✅ PUT /api/tasks/:id — Update a task (only if owned by user)
 router.put('/:id', async (req, res) => {
   try {
     const userId = req.user._id;
@@ -89,7 +86,6 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// ✅ DELETE /api/tasks/:id — Delete a task (only if owned by user)
 router.delete('/:id', async (req, res) => {
   try {
     const userId = req.user._id;

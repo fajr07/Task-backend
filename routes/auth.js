@@ -27,7 +27,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// ...existing code...
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -36,14 +36,14 @@ router.post('/login', async (req, res) => {
     const normalizedEmail = String(email).trim().toLowerCase();
     console.log(`[AUTH] Login attempt for: ${normalizedEmail}`);
 
-    // request password explicitly (schema has select: false)
+    
     const user = await User.findOne({ email: normalizedEmail }).select('+password');
     if (!user) {
       console.log('[AUTH] No user found for', normalizedEmail);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // Log whether password field is present (do NOT log the password)
+    
     console.log('[AUTH] User found. passwordPresent=', !!user.password);
 
     const match = await bcrypt.compare(password, user.password);
@@ -58,11 +58,11 @@ router.post('/login', async (req, res) => {
     return res.json({ message: 'Login successful', token, user: { id: user._id, name: user.name, email: user.email } });
   } catch (err) {
     console.error('Login error:', err);
-    // include err.message in response only in development
+    
     const payload = { message: 'Internal Server Error' };
     if (process.env.NODE_ENV !== 'production') payload.error = err.message;
     return res.status(500).json(payload);
   }
 });
-// ...existing code...
+
 module.exports = router;

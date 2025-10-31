@@ -1,4 +1,3 @@
-// ...existing code...
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
@@ -21,4 +20,3 @@ module.exports = async function auth(req, res, next) {
     return res.status(401).json({ message: 'Unauthorized', error: err.message });
   }
 };
-// ...existing code...
